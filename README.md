@@ -55,3 +55,24 @@ tutorial: application factory + blueprints.
     pip install -r requirements.txt
     flask --app app run --debug     # http://127.0.0.1:5000
     pytest
+
+## Rule: everything under BASE_PATH
+
+The fleet serves this app behind a proxy at `BASE_PATH=/direct/<agent>:<port>`, and the
+prefix is forwarded **unchanged** — it is NOT stripped before it reaches Flask. So every
+route, every redirect, every asset URL and every docs URL must carry `$BASE_PATH`.
+
+Never hard-code a leading-slash path in `app/templates/*.html` or in a redirect.
+`href="/healthz"`, `redirect("/")` and `src="/static/app.css"` all point at the proxy's
+root and 404.
+
+Use Flask's own mechanism — it already works here:
+
+- `app/__init__.py` mounts the app with `DispatcherMiddleware` under the prefix, so the
+  prefix lives in `SCRIPT_NAME` and `url_for()` emits it.
+- In templates use `{{ url_for('main.index') }}` and
+  `{{ url_for('static', filename='app.css') }}`; in views use
+  `redirect(url_for('main.index'))`.
+- Blueprint route decorators stay relative (`@bp.get("/healthz")`) — the mount adds the
+  prefix; do not repeat it.
+- `HEALTH_PATH` in `fleet.conf` stays un-prefixed; the fleet prepends `$BASE_PATH` itself.
