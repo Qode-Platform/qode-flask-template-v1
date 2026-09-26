@@ -29,16 +29,13 @@ trusting it.
 
 Listens on `$PORT` (default `8000`); health check hits `/healthz`.
 
-## BASE_PATH
+## Serving
 
-The fleet injects `BASE_PATH` (`/direct/<agent>:<port>`) and nginx forwards
-that prefix **unchanged** — so this app serves every route and asset under
-it. An empty or unset value means standalone mode: serve at the host root.
+The fleet injects `PORT` and `DATABASE_URL`; the app is served at the root of its
+own hostname (`https://<hash>.<FLEET_APP_DOMAIN>/`), so every route, redirect and
+asset URL is a plain root path.
 
-- DispatcherMiddleware mounts the app at the prefix; ProxyFix trusts the fleet's X-Forwarded-* headers.
-- `HEALTH_PATH` in `fleet.conf` stays un-prefixed; the fleet prepends `$BASE_PATH` itself.
-- A value like `direct/x:3000/` is normalised to `/direct/x:3000`.
-- Verified here: 5 tests pass, covering root mode, prefixed mode and normalisation.
+- ProxyFix trusts the fleet's X-Forwarded-* headers.
 
 ## What differs from stock output
 
@@ -55,24 +52,3 @@ tutorial: application factory + blueprints.
     pip install -r requirements.txt
     flask --app app run --debug     # http://127.0.0.1:5000
     pytest
-
-## Rule: everything under BASE_PATH
-
-The fleet serves this app behind a proxy at `BASE_PATH=/direct/<agent>:<port>`, and the
-prefix is forwarded **unchanged** — it is NOT stripped before it reaches Flask. So every
-route, every redirect, every asset URL and every docs URL must carry `$BASE_PATH`.
-
-Never hard-code a leading-slash path in `app/templates/*.html` or in a redirect.
-`href="/healthz"`, `redirect("/")` and `src="/static/app.css"` all point at the proxy's
-root and 404.
-
-Use Flask's own mechanism — it already works here:
-
-- `app/__init__.py` mounts the app with `DispatcherMiddleware` under the prefix, so the
-  prefix lives in `SCRIPT_NAME` and `url_for()` emits it.
-- In templates use `{{ url_for('main.index') }}` and
-  `{{ url_for('static', filename='app.css') }}`; in views use
-  `redirect(url_for('main.index'))`.
-- Blueprint route decorators stay relative (`@bp.get("/healthz")`) — the mount adds the
-  prefix; do not repeat it.
-- `HEALTH_PATH` in `fleet.conf` stays un-prefixed; the fleet prepends `$BASE_PATH` itself.
